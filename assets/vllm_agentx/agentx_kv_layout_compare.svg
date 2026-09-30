@@ -1,0 +1,83 @@
+<svg width="680" height="372" viewBox="0 0 680 372" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>DeepSeek V4 的 KV cache 布局：从 92 个碎片张量到一段连续分配</title>
+  <desc>左半部分为旧布局：按 cache 类型分成三个尺寸桶，全注意力、滑动窗口、线性注意力各自持有数量与块尺寸都不同的张量，合计 92 个独立张量，桶内尾部对齐产生 padding 浪费，并导致 P/D 传输与 offload 的描述符碎片化。右半部分为新布局：每个 block 只有一段连续的 backing 分配，内部依次排布全部 cache group 与全部层，描述符数量与 P/D 传输开销因此下降，offload 可按大块搬运；在启用 FP4 indexer 时还能用更小的分配单元，KV cache 显存约下降 10%。</desc>
+  <style>
+    text { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="680" height="372" fill="#FFFFFF"/>
+  <text x="16" y="26" font-size="14" font-weight="600" fill="#1A1A1A">DeepSeek V4 的 KV cache 布局：散成 92 份，还是合成 1 段</text>
+
+  <!-- ============ LEFT : BEFORE ============ -->
+  <rect x="16" y="44" width="316" height="300" rx="10" fill="#FEF7F7" stroke="#F0D5D5" stroke-width="0.9"/>
+  <text x="30" y="64" font-size="11.5" font-weight="600" fill="#A03333">旧布局：按尺寸分桶</text>
+  <text x="30" y="82" font-size="9.5" fill="#8A5555">3 个尺寸桶，共 92 个独立张量</text>
+
+  <rect x="30" y="94" width="288" height="62" rx="6" fill="#FBE9E9" stroke="#EBC4C4" stroke-width="0.8"/>
+  <text x="40" y="110" font-size="9.5" fill="#8A4444">桶 1 · 全注意力（随序列长度增长）</text>
+  <rect x="40" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="62" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="84" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="106" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="128" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="150" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="172" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="194" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="216" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="238" y="118" width="18" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="262" y="118" width="40" height="18" rx="2" fill="none" stroke="#C07A18" stroke-width="0.9" stroke-dasharray="3 2"/>
+  <text x="282" y="131" font-size="8" fill="#A8680F" text-anchor="middle">padding</text>
+
+  <rect x="30" y="164" width="288" height="62" rx="6" fill="#FBE9E9" stroke="#EBC4C4" stroke-width="0.8"/>
+  <text x="40" y="180" font-size="9.5" fill="#8A4444">桶 2 · 滑动窗口（每请求固定块数）</text>
+  <rect x="40" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="74" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="108" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="142" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="176" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="210" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="244" y="188" width="30" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="278" y="188" width="30" height="18" rx="2" fill="none" stroke="#C07A18" stroke-width="0.9" stroke-dasharray="3 2"/>
+
+  <rect x="30" y="234" width="288" height="62" rx="6" fill="#FBE9E9" stroke="#EBC4C4" stroke-width="0.8"/>
+  <text x="40" y="250" font-size="9.5" fill="#8A4444">桶 3 · 线性注意力（每请求固定块数）</text>
+  <rect x="40" y="258" width="44" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="92" y="258" width="44" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="144" y="258" width="44" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="196" y="258" width="44" height="18" rx="2" fill="#DBA0A0"/>
+  <rect x="248" y="258" width="44" height="18" rx="2" fill="#DBA0A0"/>
+
+  <text x="30" y="318" font-size="9.5" fill="#B4762A">代价：padding 浪费显存</text>
+  <text x="30" y="334" font-size="9" fill="#9A6E6E">块尺寸不一致，P/D 传输与 offload 描述符碎片化</text>
+
+  <text x="340" y="200" font-size="14" fill="#8A8A8A" text-anchor="middle">→</text>
+
+  <!-- ============ RIGHT : AFTER ============ -->
+  <rect x="348" y="44" width="316" height="300" rx="10" fill="#ECF8F2" stroke="#B6DFCB" stroke-width="0.9"/>
+  <text x="362" y="64" font-size="11.5" font-weight="600" fill="#12704A">新布局：packed</text>
+  <text x="362" y="82" font-size="9.5" fill="#3E7A62">每个 block 一段连续分配，装下全部组与层</text>
+
+  <rect x="362" y="100" width="288" height="58" rx="6" fill="#CFEBDC" stroke="#4F9E78" stroke-width="1.1"/>
+  <line x1="419.6" y1="100" x2="419.6" y2="158" stroke="#4F9E78" stroke-width="0.8"/>
+  <line x1="477.2" y1="100" x2="477.2" y2="158" stroke="#4F9E78" stroke-width="0.8"/>
+  <line x1="534.8" y1="100" x2="534.8" y2="158" stroke="#4F9E78" stroke-width="0.8"/>
+  <line x1="592.4" y1="100" x2="592.4" y2="158" stroke="#4F9E78" stroke-width="0.8"/>
+  <text x="390" y="134" font-size="9.5" fill="#13603F" text-anchor="middle">L0</text>
+  <text x="448" y="134" font-size="9.5" fill="#13603F" text-anchor="middle">L1</text>
+  <text x="506" y="134" font-size="9.5" fill="#13603F" text-anchor="middle">L2</text>
+  <text x="563" y="134" font-size="9.5" fill="#13603F" text-anchor="middle">L3</text>
+  <text x="621" y="134" font-size="9.5" fill="#13603F" text-anchor="middle">L4</text>
+
+  <line x1="362" y1="170" x2="650" y2="170" stroke="#4F9E78" stroke-width="0.9"/>
+  <line x1="362" y1="166" x2="362" y2="174" stroke="#4F9E78" stroke-width="0.9"/>
+  <line x1="650" y1="166" x2="650" y2="174" stroke="#4F9E78" stroke-width="0.9"/>
+  <text x="506" y="188" font-size="9.5" fill="#12704A" text-anchor="middle">一个 block = 一段连续内存（全部 cache group × 全部层）</text>
+
+  <text x="362" y="218" font-size="10" fill="#1C5C40">· 描述符数量与 P/D 传输开销下降</text>
+  <text x="362" y="238" font-size="10" fill="#1C5C40">· offload 搬运单位更整齐，便于大块搬</text>
+  <text x="362" y="262" font-size="10.5" fill="#12704A">· 启用 FP4 indexer 时可用更小分配单元</text>
+  <text x="362" y="280" font-size="10.5" fill="#12704A">  KV cache 显存约下降 10%</text>
+
+  <rect x="362" y="304" width="240" height="22" rx="5" fill="#DFF3E9" stroke="#B6DFCB" stroke-width="0.8"/>
+  <text x="372" y="319" font-size="9.5" fill="#3E7A62">证据等级：PR 级（#44577 / #48993）</text>
+</svg>

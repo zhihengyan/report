@@ -1,0 +1,112 @@
+<svg width="680" height="492" viewBox="0 0 680 492" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>智能体会话的负载形状：上下文只增不减，输出始终很短</title>
+  <desc>上半部分为逐轮请求构成示意图。七根柱按轮次 T1、T2、T4、T8、T16、T30、T43 排列，柱高代表该轮请求的输入长度，由下方深蓝的复用前缀段与顶端一小截橙色的新增 prefill 段堆叠而成；柱高随轮次单调增长到约 142K tokens，而橙色新增段始终只有很小一截。柱下方另有一排近乎等高的绿色短柱，代表每轮输出，始终维持在几百 token 量级。下半部分为会话结构示意：主干从 T1 连到 T43，在 T4 处分叉出一条虚线，进入标注为子代理 rollout 的节点，再把结果合流回主干末尾；统计信息为 43 轮中位轮次、44% 的会话至少含一个子代理、这些会话中子代理 rollout 中位数为 4。</desc>
+  <style>
+    text { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="680" height="492" fill="#FFFFFF"/>
+  <text x="16" y="26" font-size="14" font-weight="600" fill="#1A1A1A">智能体会话的负载形状：输入一直涨，输出一直短</text>
+
+  <!-- ================== PANEL A ================== -->
+  <rect x="16" y="40" width="648" height="250" rx="10" fill="#FAFAFA" stroke="#E2E2E2" stroke-width="0.9"/>
+  <text x="30" y="60" font-size="11" fill="#333333">每轮请求的构成：绝大部分是引擎已经见过的前缀</text>
+  <rect x="368" y="51" width="10" height="10" rx="2" fill="#2E6F9E"/>
+  <text x="382" y="60" font-size="9.5" fill="#2A5F82">复用前缀</text>
+  <rect x="446" y="51" width="10" height="10" rx="2" fill="#D99435"/>
+  <text x="460" y="60" font-size="9.5" fill="#8A5E12">新增 prefill</text>
+  <rect x="542" y="51" width="10" height="10" rx="2" fill="#4E9E70"/>
+  <text x="556" y="60" font-size="9.5" fill="#2E7A54">输出</text>
+
+  <line x1="72" y1="88" x2="648" y2="88" stroke="#ECECEC" stroke-width="0.8"/>
+  <line x1="72" y1="123" x2="648" y2="123" stroke="#ECECEC" stroke-width="0.8"/>
+  <line x1="72" y1="158" x2="648" y2="158" stroke="#ECECEC" stroke-width="0.8"/>
+  <line x1="72" y1="193" x2="648" y2="193" stroke="#ECECEC" stroke-width="0.8"/>
+  <line x1="72" y1="228" x2="648" y2="228" stroke="#C8C8C8" stroke-width="1"/>
+  <text x="64" y="91" font-size="9" fill="#6E6E6E" text-anchor="end">160K</text>
+  <text x="64" y="126" font-size="9" fill="#6E6E6E" text-anchor="end">120K</text>
+  <text x="64" y="161" font-size="9" fill="#6E6E6E" text-anchor="end">80K</text>
+  <text x="64" y="196" font-size="9" fill="#6E6E6E" text-anchor="end">40K</text>
+  <text x="64" y="231" font-size="9" fill="#6E6E6E" text-anchor="end">0</text>
+
+  <rect x="88" y="212" width="52" height="16" rx="2" fill="#2E6F9E"/>
+  <rect x="88" y="206" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="162" y="191" width="52" height="37" rx="2" fill="#2E6F9E"/>
+  <rect x="162" y="185" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="236" y="170" width="52" height="58" rx="2" fill="#2E6F9E"/>
+  <rect x="236" y="164" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="310" y="151" width="52" height="77" rx="2" fill="#2E6F9E"/>
+  <rect x="310" y="145" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="384" y="133" width="52" height="95" rx="2" fill="#2E6F9E"/>
+  <rect x="384" y="127" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="458" y="117" width="52" height="111" rx="2" fill="#2E6F9E"/>
+  <rect x="458" y="111" width="52" height="6" rx="2" fill="#D99435"/>
+  <rect x="532" y="103" width="52" height="125" rx="2" fill="#2E6F9E"/>
+  <rect x="532" y="97" width="52" height="6" rx="2" fill="#D99435"/>
+
+  <rect x="88" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="162" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="236" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="310" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="384" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="458" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <rect x="532" y="236" width="52" height="13" rx="2" fill="#4E9E70"/>
+  <text x="64" y="247" font-size="9" fill="#6E6E6E" text-anchor="end">输出</text>
+
+  <text x="114" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T1</text>
+  <text x="188" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T2</text>
+  <text x="262" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T4</text>
+  <text x="336" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T8</text>
+  <text x="410" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T16</text>
+  <text x="484" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T30</text>
+  <text x="558" y="266" font-size="9.5" fill="#6E6E6E" text-anchor="middle">T43</text>
+
+  <text x="88" y="282" font-size="9.5" fill="#6E6E6E">中位输入 142K tokens，中位输出 444 tokens，前缀命中率高于 96%</text>
+
+  <!-- ================== PANEL B ================== -->
+  <rect x="16" y="302" width="648" height="150" rx="10" fill="#FAFAFA" stroke="#E2E2E2" stroke-width="0.9"/>
+  <text x="30" y="322" font-size="11" fill="#333333">会话结构：主干 43 轮，44% 的会话会分叉出子代理</text>
+
+  <rect x="40" y="340" width="40" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="60" y="357" font-size="10" fill="#17527F" text-anchor="middle">T1</text>
+  <rect x="90" y="340" width="40" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="110" y="357" font-size="10" fill="#17527F" text-anchor="middle">T2</text>
+  <rect x="140" y="340" width="40" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="160" y="357" font-size="10" fill="#17527F" text-anchor="middle">T3</text>
+  <rect x="190" y="340" width="40" height="26" rx="5" fill="#CBE5F7" stroke="#5C9FD0" stroke-width="1.1"/>
+  <text x="210" y="357" font-size="10" fill="#0E3A5C" text-anchor="middle">T4</text>
+  <text x="248" y="357" font-size="11" fill="#6E6E6E" text-anchor="middle">…</text>
+  <rect x="272" y="340" width="40" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="292" y="357" font-size="10" fill="#17527F" text-anchor="middle">T5</text>
+  <rect x="322" y="340" width="40" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="342" y="357" font-size="10" fill="#17527F" text-anchor="middle">T6</text>
+  <text x="380" y="357" font-size="11" fill="#6E6E6E" text-anchor="middle">…</text>
+  <rect x="404" y="340" width="46" height="26" rx="5" fill="#E4F0FA" stroke="#9CC9E8" stroke-width="0.9"/>
+  <text x="427" y="357" font-size="10" fill="#17527F" text-anchor="middle">T43</text>
+
+  <line x1="80" y1="353" x2="84" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M83.5 349.6 L89.9 353 L83.5 356.4 Z" fill="#7FB4DA"/>
+  <line x1="130" y1="353" x2="134" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M133.5 349.6 L139.9 353 L133.5 356.4 Z" fill="#7FB4DA"/>
+  <line x1="180" y1="353" x2="184" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M183.5 349.6 L189.9 353 L183.5 356.4 Z" fill="#7FB4DA"/>
+  <line x1="230" y1="353" x2="240" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <line x1="256" y1="353" x2="266" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M265.5 349.6 L271.9 353 L265.5 356.4 Z" fill="#7FB4DA"/>
+  <line x1="312" y1="353" x2="316" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M315.5 349.6 L321.9 353 L315.5 356.4 Z" fill="#7FB4DA"/>
+  <line x1="362" y1="353" x2="372" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <line x1="388" y1="353" x2="398" y2="353" stroke="#7FB4DA" stroke-width="1.2"/>
+  <path d="M397.5 349.6 L403.9 353 L397.5 356.4 Z" fill="#7FB4DA"/>
+
+  <rect x="190" y="392" width="234" height="26" rx="5" fill="#FBF0D5" stroke="#D9B44A" stroke-width="0.9"/>
+  <text x="307" y="409" font-size="10" fill="#6B4A0A" text-anchor="middle">子代理 rollout（这些会话中位 4 个）</text>
+  <path d="M210 368 V385" fill="none" stroke="#C08A1E" stroke-width="1.1" stroke-dasharray="4 3"/>
+  <path d="M206.5 385.4 L213.5 385.4 L210 391.2 Z" fill="#C08A1E"/>
+  <path d="M424 405 H596 V353 H457" fill="none" stroke="#C08A1E" stroke-width="1.1" stroke-dasharray="4 3"/>
+  <path d="M457 349.6 L457 356.4 L450.6 353 Z" fill="#C08A1E"/>
+  <text x="510" y="425" font-size="9.5" fill="#8A6E33" text-anchor="middle">结果并回主干</text>
+  <text x="30" y="440" font-size="9.5" fill="#6E6E6E">子代理继承父上下文或另起；单轮之间常有数秒级间隔，前缀仍可能驻留在原卡上</text>
+
+  <text x="16" y="476" font-size="9" fill="#7A7A7A">柱高按文中中位数缩放，为示意图；原文对应图为可交互页面。</text>
+</svg>

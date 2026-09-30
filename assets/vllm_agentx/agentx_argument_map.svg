@@ -1,0 +1,90 @@
+<svg width="680" height="452" viewBox="0 0 680 452" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>vLLM × AgentX 的论证结构：三种挑战对应三个平面</title>
+  <desc>表格结构。第一行：挑战「前缀缓存压力」由数据面承载，机制包括统一页加共享块池、DeepSeek V4 的 packed KV 布局、磁盘与 CPU 分层 offload、间隔式与 Marconi 式选择性保留，证据为 KV 显存约下降 10%。第二行：挑战「执行效率」由执行面承载，机制包括模型专属并行（Kimi K3 的 DCP、DeepSeek V4 的 PCP 与 DEP）、对称内存融合的 MLA decode 路径、以及三个模型的算子级贡献，证据为每层延迟下降约 13%、PCP8 相对 TP8 有 2.65 倍 prefill 加速。第三行：挑战「P/D 配比难定」由控制面承载，机制包括 long-prefill-token-threshold 切断队头阻塞、prefill-schedule-interval 对齐 DEP 预填节奏、两阶段速率匹配方法，证据为总吞吐提升最多 93%、P90 交互性约 2.3 倍。底部为三条负面结果：流水线并行不适合热轮次、DCP 无法干净迁移到 DeepSeek V4、负载均衡打不过会话粘性路由。</desc>
+  <style>
+    text { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="680" height="452" fill="#FFFFFF"/>
+
+  <text x="16" y="26" font-size="14" font-weight="600" fill="#1A1A1A">论证结构：三个挑战 → 三个平面 → 机制与证据</text>
+  <text x="16" y="44" font-size="9.5" fill="#6E6E6E">每行读作：一个挑战，由哪个平面承载，用了哪些机制，文中给出的证据是什么</text>
+
+  <text x="24" y="64" font-size="9.5" fill="#8A8A8A">挑战</text>
+  <text x="126" y="64" font-size="9.5" fill="#8A8A8A">平面</text>
+  <text x="240" y="64" font-size="9.5" fill="#8A8A8A">关键机制</text>
+  <text x="496" y="64" font-size="9.5" fill="#8A8A8A">文中证据</text>
+
+  <!-- ============ ROW 1 : DATA PLANE ============ -->
+  <rect x="16" y="72" width="648" height="106" rx="10" fill="#EDF5FC" stroke="#C3DDF2" stroke-width="0.9"/>
+  <rect x="16" y="72" width="3" height="106" rx="1.5" fill="#4A93C8"/>
+  <text x="32" y="100" font-size="10.5" fill="#17527F">① 前缀缓存压力</text>
+  <text x="32" y="118" font-size="9" fill="#4C7FA5">每轮重放整段对话</text>
+  <text x="32" y="134" font-size="9" fill="#4C7FA5">跨 rank / 跨实例更难</text>
+
+  <line x1="118" y1="96" x2="130.5" y2="96" stroke="#A8A8A8" stroke-width="1.1"/>
+  <path d="M129.6 92.8 L136.4 96 L129.6 99.2 Z" fill="#A8A8A8"/>
+
+  <text x="140" y="100" font-size="12" font-weight="600" fill="#10405F">数据面</text>
+  <text x="140" y="118" font-size="9" fill="#4C7FA5">让 KV 缓存又热又近</text>
+
+  <text x="240" y="94" font-size="10" fill="#1B4E75">· 统一页 + 共享块池，页大小 = LCM(X, Y, Z)</text>
+  <text x="240" y="111" font-size="10" fill="#1B4E75">· packed 布局：92 个碎片张量 → 1 段连续分配</text>
+  <text x="240" y="128" font-size="10" fill="#1B4E75">· 分层 offload：CPU 池 / 磁盘 / 无卡节点</text>
+  <text x="240" y="145" font-size="10" fill="#1B4E75">· 间隔式 + Marconi 式选择性保留</text>
+
+  <text x="496" y="94" font-size="10.5" fill="#8A5E12">KV 显存约 −10%</text>
+  <text x="496" y="111" font-size="9.5" fill="#6E6E6E">（FP4 indexer 生效时）</text>
+  <text x="496" y="130" font-size="9.5" fill="#8A8A8A">证据等级：PR 级</text>
+
+  <!-- ============ ROW 2 : EXECUTION PLANE ============ -->
+  <rect x="16" y="188" width="648" height="106" rx="10" fill="#FDF7E6" stroke="#EBD9A9" stroke-width="0.9"/>
+  <rect x="16" y="188" width="3" height="106" rx="1.5" fill="#C08A1E"/>
+  <text x="32" y="216" font-size="10.5" fill="#7A5310">② 执行效率</text>
+  <text x="32" y="234" font-size="9" fill="#8A6E33">长上下文 + 紧延迟</text>
+  <text x="32" y="250" font-size="9" fill="#8A6E33">每 token 要少干活</text>
+
+  <line x1="118" y1="212" x2="130.5" y2="212" stroke="#A8A8A8" stroke-width="1.1"/>
+  <path d="M129.6 208.8 L136.4 212 L129.6 215.2 Z" fill="#A8A8A8"/>
+
+  <text x="140" y="216" font-size="12" font-weight="600" fill="#5E4008">执行面</text>
+  <text x="140" y="234" font-size="9" fill="#8A6E33">让并行跟着架构走</text>
+
+  <text x="240" y="210" font-size="10" fill="#5E4008">· Kimi K3：DCP 分片 KV；DEP 在大 batch 反超</text>
+  <text x="240" y="227" font-size="10" fill="#5E4008">· DeepSeek V4：TP 失效，改用 PCP / DEP</text>
+  <text x="240" y="244" font-size="10" fill="#5E4008">· 对称内存融合 MLA decode 的通信与计算</text>
+  <text x="240" y="261" font-size="10" fill="#5E4008">· 三个模型的算子级贡献（indexer / top-k / MoE）</text>
+
+  <text x="496" y="210" font-size="10.5" fill="#8A5E12">每层延迟约 −13%</text>
+  <text x="496" y="227" font-size="10.5" fill="#8A5E12">PCP8 相对 TP8 2.65×</text>
+  <text x="496" y="246" font-size="9.5" fill="#8A8A8A">证据等级：实测</text>
+
+  <!-- ============ ROW 3 : CONTROL PLANE ============ -->
+  <rect x="16" y="304" width="648" height="106" rx="10" fill="#EAF8F1" stroke="#B4DFC9" stroke-width="0.9"/>
+  <rect x="16" y="304" width="3" height="106" rx="1.5" fill="#2E8F63"/>
+  <text x="32" y="332" font-size="10.5" fill="#10694A">③ P/D 配比难定</text>
+  <text x="32" y="350" font-size="9" fill="#3D7A62">命中率与长度跨会话</text>
+  <text x="32" y="366" font-size="9" fill="#3D7A62">剧烈波动</text>
+
+  <line x1="118" y1="328" x2="130.5" y2="328" stroke="#A8A8A8" stroke-width="1.1"/>
+  <path d="M129.6 324.8 L136.4 328 L129.6 331.2 Z" fill="#A8A8A8"/>
+
+  <text x="140" y="332" font-size="12" font-weight="600" fill="#0B4A33">控制面</text>
+  <text x="140" y="350" font-size="9" fill="#3D7A62">让调度看懂会话</text>
+
+  <text x="240" y="326" font-size="10" fill="#0F5C3D">· long-prefill-token-threshold 切断队头阻塞</text>
+  <text x="240" y="343" font-size="10" fill="#0F5C3D">· prefill-schedule-interval 对齐 DEP 预填节奏</text>
+  <text x="240" y="360" font-size="10" fill="#0F5C3D">· 两阶段速率匹配：饱和剖析 → P/D 扫描</text>
+  <text x="240" y="377" font-size="10" fill="#0F5C3D">· 会话粘性路由优先于瞬时负载均衡</text>
+
+  <text x="496" y="326" font-size="10.5" fill="#10694A">总吞吐最多 +93%</text>
+  <text x="496" y="343" font-size="10.5" fill="#10694A">P90 交互性约 ×2.3</text>
+  <text x="496" y="362" font-size="9.5" fill="#8A8A8A">证据等级：实测（单点）</text>
+
+  <!-- ============ BOTTOM : NEGATIVE RESULTS ============ -->
+  <rect x="16" y="420" width="648" height="24" rx="6" fill="#FDEFEF" stroke="#F0C8C8" stroke-width="0.8"/>
+  <text x="28" y="436" font-size="10" fill="#A03333">反例（作者自述失效）</text>
+  <text x="164" y="436" font-size="10" fill="#8A4A4A">PP 不适配热轮次</text>
+  <text x="292" y="436" font-size="10" fill="#8A4A4A">DCP 迁不到 DeepSeek V4</text>
+  <text x="460" y="436" font-size="10" fill="#8A4A4A">负载均衡打不过会话粘性</text>
+</svg>
