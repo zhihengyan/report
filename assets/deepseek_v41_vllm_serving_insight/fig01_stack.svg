@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="598" viewBox="0 0 780 598" role="img"
+     aria-label="DeepSeek-V4.1-Flash 在 vLLM 上的四层优化全景：模型层省显存设计、vLLM 系统层的 SWA bounded replay、算子层的融合与稀疏 kernel、以及 SemiAnalysis AgentX 上的实测收益。">
+  <rect x="0" y="0" width="780" height="598" fill="#FFFFFF"/>
+
+  <!-- ============ card A：模型层 ============ -->
+  <rect x="0" y="8" width="780" height="114" fill="#EDF5FC" stroke="#C3DDF2" stroke-width="1"/>
+  <rect x="0" y="8" width="4" height="114" fill="#2E6F9E"/>
+  <text x="20" y="32" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12" font-weight="600" letter-spacing="0.6" fill="#3E6890">模型层 ｜ V4.1-Flash 自带的省显存设计</text>
+  <text x="20" y="60" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">CED 编码器 - 解码器：prefill 每个 token 激活 8B 参数，decode 激活 16B 参数</text>
+  <text x="20" y="84" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">全局 KV：CSA2 压缩 + FP4 + 40 层共享 → 每 token 890 B</text>
+  <text x="20" y="108" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">滑动窗口 KV（SWA）：FP8 未压缩，每层保留最近 128 个位置 × 40 层</text>
+  <rect x="590" y="18" width="160" height="20" fill="#FFFFFF" stroke="#C3DDF2" stroke-width="1"/>
+  <text x="670" y="32" font-family="Consolas, Segoe UI, sans-serif" font-size="11.5" fill="#3E6890" text-anchor="middle">890 B / token</text>
+
+  <!-- 箭头 A → B -->
+  <line x1="34" y1="126" x2="34" y2="140" stroke="#A8A8A8" stroke-width="1.2"/>
+  <path d="M31.2 139.6 L36.8 139.6 L34 145.6 Z" fill="#A8A8A8"/>
+
+  <!-- ============ card B：系统层 ============ -->
+  <rect x="0" y="148" width="780" height="138" fill="#FDF7E6" stroke="#EBD9A9" stroke-width="1"/>
+  <rect x="0" y="148" width="4" height="138" fill="#C08A1E"/>
+  <text x="20" y="172" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12" font-weight="600" letter-spacing="0.6" fill="#8A6420">系统层 ｜ SWA bounded replay（DeepSeek-V4.1 上默认开启）</text>
+  <text x="20" y="200" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">编码器侧：prefix 命中长度 H 时只重算区间 (H − 128, H)，窗口在 s = H − 128 处裁剪，SWA KV 不再进 prefix cache</text>
+  <text x="20" y="224" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">解码器侧：layer 20 每个 token 照常计算以产出全局 KV，layers 21 – 39 只跑每个请求最后 128 个 token</text>
+  <text x="20" y="248" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">于是跳过的层数是 19 / 40 ≈ 47.5%，长 prompt 的 prefill 计算量接近砍半</text>
+  <text x="20" y="272" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">CUDA graph 分段捕获：layers 0 – 20 用完整 batch，layers 21 – 39 用裁剪后的 batch</text>
+  <rect x="590" y="158" width="160" height="20" fill="#FFFFFF" stroke="#EBD9A9" stroke-width="1"/>
+  <text x="670" y="172" font-family="Consolas, Segoe UI, sans-serif" font-size="11.5" fill="#8A6420" text-anchor="middle">TTFT −30–40%</text>
+
+  <!-- 箭头 B → C -->
+  <line x1="34" y1="288" x2="34" y2="302" stroke="#A8A8A8" stroke-width="1.2"/>
+  <path d="M31.2 301.6 L36.8 301.6 L34 307.6 Z" fill="#A8A8A8"/>
+
+  <!-- ============ card C：算子层 ============ -->
+  <rect x="0" y="310" width="780" height="138" fill="#EAF8F1" stroke="#B4DFC9" stroke-width="1"/>
+  <rect x="0" y="310" width="4" height="138" fill="#4E9E70"/>
+  <text x="20" y="334" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12" font-weight="600" letter-spacing="0.6" fill="#4F6B45">算子层 ｜ 接入 DeepSeek 开源 kernel 并继续融合</text>
+  <text x="20" y="362" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">融合：MegaAttention 把 query RoPE、稀疏注意力、输出反 RoPE、FP8 量化压进同一次 launch</text>
+  <text x="20" y="386" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">融合：Mega-mHC（mHC 链 + RMSNorm）、Mega-Gate（gate GEMM + 打分 + top-k）、融合 WO-A</text>
+  <text x="20" y="410" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">稀疏与压缩：索引 kernel 只对 16K 候选打分，成本不随上下文增长；NVFP4 KV 比 FP8 小 45%</text>
+  <text x="20" y="434" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">重叠与访存：mHC 系数走旁路 CUDA stream、Engram 查表异步预取、大页（THP）</text>
+  <rect x="590" y="320" width="160" height="20" fill="#FFFFFF" stroke="#B4DFC9" stroke-width="1"/>
+  <text x="670" y="334" font-family="Consolas, Segoe UI, sans-serif" font-size="11.5" fill="#4F6B45" text-anchor="middle">24 → 16 launches</text>
+
+  <!-- 箭头 C → D -->
+  <line x1="34" y1="450" x2="34" y2="464" stroke="#A8A8A8" stroke-width="1.2"/>
+  <path d="M31.2 463.6 L36.8 463.6 L34 469.6 Z" fill="#A8A8A8"/>
+
+  <!-- ============ card D：实测 ============ -->
+  <rect x="0" y="472" width="780" height="114" fill="#FAFAFA" stroke="#E2E2E2" stroke-width="1"/>
+  <rect x="0" y="472" width="4" height="114" fill="#D99435"/>
+  <text x="20" y="496" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12" font-weight="600" letter-spacing="0.6" fill="#6E6E6E">实测 ｜ SemiAnalysis AgentX，GB300 NVL72</text>
+  <text x="20" y="524" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">固定 155 tok/s/user：27k → 144k tok/s/chip（5.3×）</text>
+  <text x="20" y="548" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">最高交互性点：311 → 599 tok/s/user（1.9×）</text>
+  <text x="20" y="572" font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="13" fill="#1A1A1A">固定 94k tok/s/chip：TTFT 1.86 s → 0.32 s（−83%）</text>
+  <rect x="590" y="482" width="160" height="20" fill="#FFFFFF" stroke="#E2E2E2" stroke-width="1"/>
+  <text x="670" y="496" font-family="Consolas, Segoe UI, sans-serif" font-size="11.5" fill="#6E6E6E" text-anchor="middle">AgentX 5.3×</text>
+</svg>

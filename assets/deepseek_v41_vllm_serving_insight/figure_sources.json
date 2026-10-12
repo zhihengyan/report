@@ -1,0 +1,59 @@
+{
+  "source_post": {
+    "title": "DeepSeek-V4.1-Flash on vLLM: 5x Agentic Throughput Since Day 0",
+    "authors": "Inferact and the vLLM Team",
+    "date": "2026-10-07",
+    "url": "https://vllm.ai/blog/2026-10-07-deepseek-v41-flash"
+  },
+  "figures": [
+    {
+      "file": "fig01_stack.png",
+      "svg": "fig01_stack.svg",
+      "origin": "authored",
+      "note": "按原文的模型层 / 系统层 / 算子层 / 实测四段结构与正文数字自绘；配色为浅底方案，用于在浅色与深色主题下都能阅读。"
+    },
+    {
+      "file": "fig02_swa_replay.png",
+      "svg": "fig02_swa_replay.svg",
+      "origin": "reconstructed",
+      "source_url": "https://vllm.ai/blog-assets/interactive_pages/dsv41-swa-replay.html",
+      "source_ref": "原文 Figure 2（可交互页面）",
+      "note": "(a) 取 ?step=2（Exact），(b) 取 ?step=4（Clipped）；页面自带 ?static 与 ?step=N 参数用于截图与深链。示例假定 6 层、每格一个 W=128 的窗口，原文注明 V4.1-Flash 实际 L=40。"
+    },
+    {
+      "file": "fig03_decoder_trim.png",
+      "origin": "reconstructed",
+      "source_url": "https://vllm.ai/blog-assets/interactive_pages/dsv41-swa-decoder.html",
+      "source_ref": "原文 Figure 3（可交互页面）",
+      "note": "取 ?static&step=3，即最后一步「CUDA graphs」。层号取自 V4.1-Flash 配置：最后一个产出 KV 的层是 layer 20。"
+    },
+    {
+      "file": "fig04_prefill_ttft.png",
+      "origin": "reconstructed",
+      "source_url": "https://vllm.ai/blog-assets/interactive_pages/dsv41-prefill-ttft.html",
+      "source_ref": "原文 Figure 4（可交互页面）",
+      "note": "柱高为相对 replay off 的百分比；柱下标出绝对 TTFT。数据取页面内嵌数组，与正文数值一致。口径：NVIDIA GB200，3 次取中位数，prefix caching 关闭，单请求。"
+    },
+    {
+      "file": "fig05_kernel_fusion.png",
+      "origin": "reconstructed",
+      "source_url": "https://vllm.ai/blog-assets/interactive_pages/dsv41-kernel-fusion.html",
+      "source_ref": "原文 Figure 5（可交互页面）",
+      "note": "取 ?static&step=10，即 High throughput · DEP2 分组的最后一步「Together」。一个方块 = 一次 kernel launch；通信与辅助 stream 省略，宽度仅为示意。"
+    },
+    {
+      "file": "fig06_agentx_results.png",
+      "origin": "original",
+      "source_url": "https://vllm.ai/blog-assets/figures/2026-10-07-deepseek-v41-flash/agentx-results.png",
+      "source_ref": "原文 Figure 1 / Figure 6（同一张图）",
+      "note": "SemiAnalysis AgentX 结果，2026-09-11 与 2026-10-02 两条曲线；模型 DeepSeek V4.1 Flash 552B，GB300 NVL72。"
+    },
+    {
+      "file": "fig07_ttft_vs_throughput.png",
+      "origin": "original",
+      "source_url": "https://vllm.ai/blog-assets/figures/2026-10-07-deepseek-v41-flash/ttft-vs-throughput.png",
+      "source_ref": "原文 Figure 7",
+      "note": "TTFT–吞吐权衡，标注为固定 94k tok/s/chip 下的 TTFT 降幅。"
+    }
+  ]
+}
