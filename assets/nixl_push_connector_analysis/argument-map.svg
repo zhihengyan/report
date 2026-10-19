@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" width="1180" height="760">
+<style>
+  text { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+</style>
+<rect x="0" y="0" width="1180" height="760" fill="#FFFFFF"/>
+
+<text x="32" y="44" font-size="25" font-weight="700" fill="#1A1A1A">push 连接器把三段协调工作移出首 token 的关键路径</text>
+<text x="32" y="72" font-size="14.5" fill="#6E6E6E">论证顺序：问题在哪 → 为什么慢 → 改了什么 → 拿到的数 → 不能外推的地方</text>
+
+<!-- ============ Band 1: 问题 ============ -->
+<rect x="32" y="92" width="1116" height="86" rx="8" fill="#FAFAFA" stroke="#E2E2E2" stroke-width="1.2"/>
+<rect x="44" y="104" width="56" height="62" rx="5" fill="#EFEFEF"/>
+<text x="72" y="132" font-size="15" font-weight="700" fill="#4A4A4A" text-anchor="middle">问</text>
+<text x="72" y="152" font-size="15" font-weight="700" fill="#4A4A4A" text-anchor="middle">题</text>
+<text x="120" y="124" font-size="15.5" font-weight="700" fill="#1A1A1A">关键路径 = 排队 + prefill 计算 + 协调 + 搬运</text>
+<text x="120" y="148" font-size="13.5" fill="#4A4A4A">协调含三段：① router 中继源元数据　② D 侧分配目的块并准备 NIXL 描述符　③ 提交传输。</text>
+<text x="120" y="168" font-size="13.5" fill="#4A4A4A">pull 模式下这三段都在 prefill 结束之后才开始 —— 路径长度由“等对方准备好”决定，而不是由带宽决定。</text>
+
+<path d="M585 182 L595 188 L585 194 Z" fill="#C0C0C0"/>
+
+<!-- ============ Band 2: 机理 ============ -->
+<rect x="32" y="200" width="1116" height="146" rx="8" fill="#FDEFEF" stroke="#F0C8C8" stroke-width="1.2"/>
+<rect x="44" y="212" width="56" height="62" rx="5" fill="#F6DEDE"/>
+<text x="72" y="240" font-size="15" font-weight="700" fill="#8A4A4A" text-anchor="middle">机</text>
+<text x="72" y="260" font-size="15" font-weight="700" fill="#8A4A4A" text-anchor="middle">理</text>
+
+<rect x="120" y="212" width="330" height="118" rx="6" fill="#FFFFFF" stroke="#F0C8C8" stroke-width="1.1"/>
+<text x="138" y="240" font-size="15" font-weight="700" fill="#1A1A1A">① 串行：relay 只能等 KV 算完</text>
+<text x="138" y="266" font-size="13" fill="#4A4A4A">目的块要写到哪、源块在哪，都由</text>
+<text x="138" y="288" font-size="13" fill="#4A4A4A">prefill 的输出决定，元数据无法提前。</text>
+<text x="138" y="312" font-size="13" fill="#6E6E6E">这一段是纯路径长度，与带宽无关。</text>
+
+<rect x="466" y="212" width="330" height="118" rx="6" fill="#FFFFFF" stroke="#F0C8C8" stroke-width="1.1"/>
+<text x="484" y="240" font-size="15" font-weight="700" fill="#1A1A1A">② 内联：setup 跑在 D 主循环里</text>
+<text x="484" y="266" font-size="13" fill="#4A4A4A">分配块、准备描述符、提交 READ 这三件</text>
+<text x="484" y="288" font-size="13" fill="#4A4A4A">事同步插在 decode worker 的步进中，</text>
+<text x="484" y="312" font-size="13" fill="#6E6E6E">期间整个批次都不产出 token。</text>
+
+<rect x="812" y="212" width="324" height="118" rx="6" fill="#FFFFFF" stroke="#F0C8C8" stroke-width="1.1"/>
+<text x="830" y="240" font-size="15" font-weight="700" fill="#1A1A1A">③ 放大：成本由全场分摊</text>
+<text x="830" y="266" font-size="13" fill="#4A4A4A">步进变长 → 在飞请求 TPOT 同步升高 →</text>
+<text x="830" y="288" font-size="13" fill="#4A4A4A">驻留变长 → 并发与排队上升 → 单位时间</text>
+<text x="830" y="312" font-size="13" fill="#6E6E6E">要做的 setup 更多。这是一个正反馈。</text>
+
+<path d="M585 352 L595 358 L585 364 Z" fill="#C0C0C0"/>
+
+<!-- ============ Band 3: 改动 ============ -->
+<rect x="32" y="370" width="1116" height="156" rx="8" fill="#EDF5FC" stroke="#C3DDF2" stroke-width="1.2"/>
+<rect x="44" y="382" width="56" height="62" rx="5" fill="#DCEBF8"/>
+<text x="72" y="410" font-size="15" font-weight="700" fill="#2C5A7C" text-anchor="middle">改</text>
+<text x="72" y="430" font-size="15" font-weight="700" fill="#2C5A7C" text-anchor="middle">动</text>
+
+<text x="120" y="398" font-size="13" font-weight="700" fill="#2C5A7C">动作</text>
+<text x="250" y="398" font-size="13" font-weight="700" fill="#2C5A7C">pull：在哪做、什么时候</text>
+<text x="706" y="398" font-size="13" font-weight="700" fill="#2C5A7C">push：挪到哪、什么时候</text>
+<line x1="120" y1="408" x2="1136" y2="408" stroke="#C3DDF2" stroke-width="1.1"/>
+
+<text x="120" y="434" font-size="13.5" font-weight="700" fill="#1A1A1A">注册</text>
+<text x="250" y="434" font-size="13.5" fill="#3A3A3A">prefill 结束后，D 等 router 中继源元数据，才分配目的块</text>
+<text x="706" y="434" font-size="13.5" fill="#3A3A3A">D 分配目的块的同时就通知 P，与 prefill 并行</text>
+
+<line x1="120" y1="446" x2="1136" y2="446" stroke="#DCEBF8" stroke-width="1"/>
+
+<text x="120" y="472" font-size="13.5" font-weight="700" fill="#1A1A1A">会合</text>
+<text x="250" y="472" font-size="13.5" fill="#3A3A3A">D 被动等元数据到达，再串行准备传输</text>
+<text x="706" y="472" font-size="13.5" fill="#3A3A3A">P 侧双向匹配，注册与 KV 谁后到谁触发</text>
+
+<line x1="120" y1="484" x2="1136" y2="484" stroke="#DCEBF8" stroke-width="1"/>
+
+<text x="120" y="510" font-size="13.5" font-weight="700" fill="#1A1A1A">写</text>
+<text x="250" y="510" font-size="13.5" fill="#3A3A3A">D 发起 NIXL READ，从 P 拉</text>
+<text x="706" y="510" font-size="13.5" fill="#3A3A3A">P 发起 NIXL WRITE，由后台线程提交</text>
+
+<path d="M585 530 L595 536 L585 542 Z" fill="#C0C0C0"/>
+
+<!-- ============ Band 4: 证据 ============ -->
+<rect x="32" y="548" width="1116" height="118" rx="8" fill="#EAF8F1" stroke="#B4DFC9" stroke-width="1.2"/>
+<rect x="44" y="560" width="56" height="62" rx="5" fill="#D8F0E5"/>
+<text x="72" y="588" font-size="15" font-weight="700" fill="#2F6B4F" text-anchor="middle">证</text>
+<text x="72" y="608" font-size="15" font-weight="700" fill="#2F6B4F" text-anchor="middle">据</text>
+
+<text x="132" y="592" font-size="30" font-weight="700" fill="#2F6B4F">3.2×</text>
+<text x="132" y="618" font-size="13" fill="#3A3A3A">TTFT 改善，8 QPS / 16k 输入</text>
+<text x="132" y="640" font-size="13" fill="#6E6E6E">1744 ms → 540 ms</text>
+
+<text x="392" y="592" font-size="30" font-weight="700" fill="#2F6B4F">−33%</text>
+<text x="392" y="618" font-size="13" fill="#3A3A3A">TPOT 改善，8 QPS / 16k 输入</text>
+<text x="392" y="640" font-size="13" fill="#6E6E6E">10.4 ms → 7.0 ms</text>
+
+<text x="650" y="592" font-size="30" font-weight="700" fill="#8A6212">11 ms vs 1204 ms</text>
+<text x="650" y="618" font-size="13" fill="#3A3A3A">同一工况下的单次搬运物理下限（按 EFA 带宽推算）与实测差距</text>
+<text x="650" y="640" font-size="13" fill="#6E6E6E">差距比搬运本身大两个数量级 —— 慢在协调，不在搬运</text>
+<rect x="1010" y="562" width="96" height="22" rx="4" fill="#FDF7E6" stroke="#EBD9A9" stroke-width="1"/>
+<text x="1058" y="577" font-size="12" fill="#8A6212" text-anchor="middle">本文推算</text>
+
+<path d="M585 670 L595 676 L585 682 Z" fill="#C0C0C0"/>
+
+<!-- ============ Band 5: 边界 ============ -->
+<rect x="32" y="690" width="1116" height="54" rx="8" fill="#FDF7E6" stroke="#EBD9A9" stroke-width="1.2"/>
+<rect x="44" y="698" width="56" height="38" rx="5" fill="#F7EBCB"/>
+<text x="72" y="723" font-size="15" font-weight="700" fill="#8A6212" text-anchor="middle">边界</text>
+
+<text x="124" y="714" font-size="13" fill="#3A3A3A">· D 必须在分发时就选定，牺牲路由自由度</text>
+<text x="124" y="734" font-size="13" fill="#3A3A3A">· D 侧 KV 预约提前到 prefill 未完成时</text>
+
+<text x="560" y="714" font-size="13" fill="#3A3A3A">· 口径为 prefix cache 关闭；命中率高时收益收窄</text>
+<text x="560" y="734" font-size="13" fill="#3A3A3A">· 单模型、单拓扑、单 AZ，最高只测到 8 QPS</text>
+</svg>
