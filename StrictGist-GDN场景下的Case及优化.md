@@ -212,3 +212,36 @@ Commit `7cda4da4` 正是通过以下两项**通用性优化**做到这一点的�
    - 在 `RecomputeTaskRange` 中新增 `uOnly`，在 `!kConcatUW`（即 `BT != 64 || V != 128`，覆盖 `BT=128`）配置下开启 `uOnly = true`，跳过 `k * beta * exp(g)` 向量制备和 `W = A @ KbgExp` Cube 矩阵乘，并正确维护 `RecomputeWUKeepAMmad` 的 L1 A 矩阵驻留释放标志。
 5. **`FwdO` 零状态极简输出**（[chunk_recompute_wu_fwd_ho.cpp](file:///mnt/workspace/flash-linear-attention-npu/fla/ops/ascendc/gdn/chunk_gdn_fwd/chunk_gated_delta_rule_fwd/op_kernel/internal/arch22/pipeline/wu_ho/chunk_recompute_wu_fwd_ho.cpp)、[gdn_fwd_o_kernel.hpp](file:///mnt/workspace/flash-linear-attention-npu/fla/ops/ascendc/gdn/chunk_gdn_fwd/chunk_gated_delta_rule_fwd/op_kernel/internal/arch22/stages/fwd_o/op_kernel/gemm/kernel/gdn_fwd_o_kernel.hpp)、[block_epilogue_gdn_fwdo_output.hpp](file:///mnt/workspace/flash-linear-attention-npu/fla/ops/ascendc/gdn/chunk_gdn_fwd/chunk_gated_delta_rule_fwd/op_kernel/internal/arch22/stages/fwd_o/op_kernel/epilogue/block/block_epilogue_gdn_fwdo_output.hpp)）：
    - 通过 `ConfigureZeroH(true)` 启用 `zeroHEnabled_`，跳过第二次 Cube 矩阵乘 `Q @ H`，并在 Epilogue 中调用 `ProcessZeroHOutput`（同时支持 `nActual <= 128` 与 `> 128`），只对 `gmVWorkspace` 中的 `attn @ U` 结果执行 `Muls(scale) -> Cast -> CopyOutputToGm`，完全省略 `gmG` 读取、`Exp`、`Broadcast`、`gmHWorkspace` 读取、`Mul` 与 `Add`。
+
+---
+
+### 3. Q&A 补充说明
+
+#### Q1：总长度 `T` 明明是 `330 / 410 / 490`，分块大小 `chunk_size = 128`，为什么还能算作“单 Chunk”放在一个块内完成？
+
+并不是把 `330 / 410 / 490` 个 token 塞进同一个长度为 128 的块里，而是 **5 条互不相干的短序列首尾拼接（pack）在一起**，每条序列各自只占 1 个属于自己的块（一共 5 个独立的块，而不是 1 个块）。
+
+以 `T = 330`（`cu_seqlens = [0, 66, 132, 198, 264, 330]`）为例：
+- 它代表张量内有 5 条独立序列（Seq 0 ~ Seq 4），每条序列的长度均为 **`66 <= 128`**（`T = 410` 对应 5 条 × `82`，`T = 490` 对应 5 条 × `98`）；
+- `varlen` 模式下序列之间绝不跨越分块，也不互相做 Attention 或传递隐状态 $H$。算子分块按**每条序列内部**从 0 开始切分，因此每条序列都只有各自的 **Chunk 0**（对应现网表中的 `chunkIndicesOptional = [0, 0, 0, 0, 0]`）；
+- Kernel 入口（`RunPhase6`）在 `varlen` 下遍历检查每一条序列的长度 `cuPtr[seq + 1] - cuPtr[seq] <= 128`，确认没有任何序列产生 Chunk 1 后才激活 `singleChunkNoState`（如果换成一条长 330 的单序列 `cu_seqlens = [0, 330]`，则会切出 3 个 Chunk 并自动回退到完整跨块状态路径）。
+
+---
+
+#### Q2：在实际运算时，5 条序列是否完全独立、同时、并行运行？如果是整条长序列切多块，会做什么处理和掩盖？当前 5 条小序列在运行过程中有哪些优化与局限？
+
+结论是：**这 5 条序列（准确说是 `5 条序列 × 16 个头 = 80 个任务`）在核内确实是相互独立、并行分摊在多个 AI Core 上同时运行的，并不是“1 个 AI Core 独占 1 条序列”。**
+
+1. **实际运算时的并行粒度（Ascend 910B，`20 AIC + 40 AIV`）**：
+   - **Stage P（`GdnCumsumPrepare`）**：任务队列按 `abc.B * abc.NT` 划分（每条序列每个 chunk 1 个任务，负责写完该 chunk 的全部 `Hv = 16` 个头）。因此在 `Batchsize = 5` 时只有 **5 个并行任务**跑在 40 个 AIV 上（`Batchsize = 16` 时为 16 个任务）；
+   - **主计算阶段（`KKT -> SolveTri -> RecomputeWU -> FwdO`）**：任务队列按 **`B * Hv * NT = 1 × 16 × 5 = 80`** 二维打散（`Batchsize = 16` 时为 `16 × 16 = 256`）。这 80 个完全独立的 `(序列块, Head)` 任务均匀分摊到全部 20 个 AIC / 40 个 AIV 核上同时并行计算。
+   - **实测印证**：当 `Batchsize` 从 `5` 扩到 `16`（计算量 `3.2x`）时，总耗时仅从 `128.7 / 137.7 / 150.8 us` 增至 `226.0 / 250.7 / 285.7 us`（`1.76 ~ 1.89x`），正说明 `Batchsize = 5` 时多核尚未喂满，`Batchsize = 16` 填补了 AI Core 的空闲并行槽位。
+
+2. **整条长序列切成多个 Chunk 时的处理与掩盖**：
+   - **块内计算可并行 + AIC/AIV 异构流水掩盖**：`Stage P`、`KKT`、`SolveTri`、`RecomputeWU` 只依赖单个 chunk 内部数据，所有 `(head, chunk)` 跨核并行，且同一阶段内 Cube（AIC）与 Vector（AIV）通过局部标志（如 `FRONT_READY_FLAG`）异步流水掩盖，配合 `RecomputeWUKeepAMmad` 将逆矩阵 `A` 驻留 L1 复用。
+   - **跨 Chunk 状态递推必须串行 + HO 流水线掩盖**：到了 `FwdH` 阶段，同一条序列内部 Chunk 1 必须等待 Chunk 0 更新出 $H_1$ 才能递推 $H_2$，无法跨 chunk 并行。原工程为此设计了 **HO 流水线（`GdnHoPipeline` / `ResolveHoIdlePipeline` / `HoOwnerLocal`）**，通过空闲核接力或本核本地接力（`kOwnerLocal`），将 `FwdH` 的串行递推延迟与 `FwdO` 的计算/访存尽量重叠掩盖。
+
+3. **当前 5 条并行小序列运行中的优化与尚存空间**：
+   - **保留的原有优化**：80 个独立任务仍保留 AIC/AIV 异步流水掩盖、片上缓存/索引复用以及按真实序列长度（`66 / 82 / 98`）的有效边界计算。
+   - **`7cda4da4` 新增的运行流程简化**：移除了原本针对多块状态交接的 `DispatchFwdH`、`ResolveHoIdlePipeline` 与全核屏障同步 **`SyncAll`**，使全部 80 个任务摆脱跨块状态耦合与全局同步阻塞，实现端到端无串行耦合流水执行。
+   - **尚存的潜在调度空间**：目前 Stage P（`GdnCumsumPrepare`）仍按 `B * NT`（仅 5 个任务）调度，在 `Batchsize = 5` 时 40 个 AIV 中有 35 个在该阶段空闲；若后续需要进一步压榨极端小 Batch 时延，可考虑将 Stage P 队列按 `(B * NT, Hv)` 展开以提高 AIV 利用率（当前改动已大幅超过 10% 目标，暂未触动 Stage P 队列契约）。
