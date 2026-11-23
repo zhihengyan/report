@@ -2,8 +2,9 @@
 
 > **关联仓库与提交**：
 > - 用例基线提交：`64af2068`（`test(chunk_gated_delta_rule_fwd): add 3 BSND varlen perf cases and layout support`）
-> - 算子优化提交：`7cda4da4`（`perf by Atg: A2芯片特定用例优化`）
-> - `Batchsize = 16` 补测分支：`perf/chunk_gated_delta_rule_fwd_bs16`（仅更新 `_perf.json` 中 `id: 2 ~ 4` 为 `Batchsize = 16` 规模）
+> - 算子一轮优化提交：`7cda4da4`（`perf by Atg: A2芯片特定用例优化`）
+> - 算子二轮优化提交：`1e98e84f`（`perf(chunk_gated_delta_rule_fwd): optimize arch22 single-chunk bs16 path (~15% speedup)`，基于 `perf/chunk_gated_delta_rule_fwd_bs16`）
+> - `Batchsize = 16` 性能分支：`perf/chunk_gated_delta_rule_fwd_bs16`（将 `_perf.json` 中 `id: 2 ~ 4` 更新为 `Batchsize = 16` 规模并合入二轮优化）
 > - 目标硬件平台：Ascend 910B（`ascend910b` / `DAV_2201`）
 
 ---
@@ -127,63 +128,35 @@ Commit `7cda4da4` 正是通过以下两项**通用性优化**做到这一点的�
 
 ---
 
-## 三、算子优化性能对比（历史实测数据）
+## 三、算子优化性能对比（`Batchsize = 16` 实测数据）
 
-以下数据来自 Ascend 910B（NPU 0）上 ATK 性能测试框架（`run_test_cpu.sh -op=chunk_gated_delta_rule_fwd -npu_device_id=0 -scope=performance`，每个用例 Profiling 统计 `Count=20` 次执行均值）：
-- **优化前基线**（commit `64af2068`）：`atk_chunk_gated_delta_rule_fwd_perf_2026-11-18-19-42-27-505549`
-- **优化后结果**（commit `7cda4da4`）：`atk_chunk_gated_delta_rule_fwd_perf_2026-11-18-23-31-22-278296`
+在同一台 Ascend 910B3（逻辑设备 `npu:0`）上，用 **CANN 9.1.0** 分别重编基线 `64af2068` 和优化版 `b915797f` 的 kernel。两版均使用分支 `perf/chunk_gated_delta_rule_fwd_bs16` 的同一份 ATK 性能用例，执行 `run_test_cpu.sh -op=chunk_gated_delta_rule_fwd -npu_device_id=0 -scope=performance`，每个版本测两轮，每轮每用例采样 20 次。表中取 `op_summary.csv` 的 `Task Duration(us)` 均值。本轮同环境对比覆盖 `id: 2 ~ 4`。
 
-### 3.1 全部 5 个性能用例端到端耗时对比
+### 3.1 `Batchsize = 16` 设备侧总时延对比
 
-| 用例 ID | 场景描述 | 优化前均值 (us) | 优化后均值 (us) | 绝对收益 (us) | 相对优化幅度 |
-| :---: | :--- | ---: | ---: | ---: | :---: |
-| `id: 0` | 长序列 inference（`B=1, T=11274, BNSD, BT=64, state_initial_final`） | `3879.463` | `3856.865` | `-22.598` | `-0.58%`（无回退） |
-| `id: 1` | 长序列 training（`B=2, T=8192, BNSD, BT=64, dense`） | `4860.718` | `4859.895` | `-0.823` | `-0.02%`（无回退） |
-| **`id: 2`** | **StrictGist varlen `T=330`（5×66, `BSND, BT=128`）** | **`195.936`** | **`128.668`** | **`-67.268`** | **`-34.33%`** |
-| **`id: 3`** | **StrictGist varlen `T=410`（5×82, `BSND, BT=128`）** | **`207.194`** | **`137.746`** | **`-69.448`** | **`-33.52%`** |
-| **`id: 4`** | **StrictGist varlen `T=490`（5×98, `BSND, BT=128`）** | **`219.989`** | **`150.768`** | **`-69.221`** | **`-31.47%`** |
+**基线时延包含 `Cast`、`Transpose` 和融合 kernel `ChunkGatedDeltaRuleFwd`。** 每次调用将这三个步骤的设备时延相加。优化版在这三个用例上只有一个融合 kernel。表中负数表示时延下降，绝对收益按优化后均值减优化前均值计算，总加速比按优化前均值除以优化后均值计算。
 
-### 3.2 重点用例（`id: 2 ~ 4`）子算子 Profiling 拆解对比（`op_statistic.csv`）
+| 用例 ID | 场景描述 | 优化前均值 (us) | 优化后均值 (us) | 绝对收益 (us) | 相对优化幅度 | 总加速比 |
+| :---: | :--- | ---: | ---: | ---: | :---: | :---: |
+| **`id: 2`** | StrictGist varlen `T=1056`（16×66，`BSND, BT=128`） | `315.604` | **`94.188`** | `-221.416` | **`-70.16%`** | `3.35x` |
+| **`id: 3`** | StrictGist varlen `T=1312`（16×82，`BSND, BT=128`） | `341.867` | **`108.634`** | `-233.233` | **`-68.22%`** | `3.15x` |
+| **`id: 4`** | StrictGist varlen `T=1568`（16×98，`BSND, BT=128`） | `383.934` | **`119.709`** | `-264.226` | **`-68.82%`** | `3.21x` |
 
-对比 Profiling 中 `op_statistic.csv` 的内部拆解，可以清晰验证两项优化各自的贡献来源：
+### 3.2 重点用例（`id: 2 ~ 4`）子算子 Profiling 拆解
 
-| 用例 ID | 优化前子算子构成及平均耗时（us / 占比） | 优化后子算子构成及平均耗时（us / 占比） | 拆解收益分析 |
+| 用例 ID | 优化前子算子构成及平均耗时（us / 占比） | 本轮优化后子算子构成及平均耗时（us / 占比） | 拆解收益分析 |
 | :---: | :--- | :--- | :--- |
-| **`id: 2`** (`T=330`) | • `ChunkGatedDeltaRuleFwd`: `181.205` (`92.482%`)<br>• `Transpose`: `12.659` (`6.461%`)<br>• `Cast`: `2.072` (`1.057%`)<br>**合计：`195.936 us`** | • `ChunkGatedDeltaRuleFwd`: `128.668` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`128.668 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-14.731 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-52.537 us`**（主核自身提速 `-28.99%`） |
-| **`id: 3`** (`T=410`) | • `ChunkGatedDeltaRuleFwd`: `192.496` (`92.906%`)<br>• `Transpose`: `12.468` (`6.018%`)<br>• `Cast`: `2.230` (`1.076%`)<br>**合计：`207.194 us`** | • `ChunkGatedDeltaRuleFwd`: `137.746` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`137.746 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-14.698 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-54.750 us`**（主核自身提速 `-28.44%`） |
-| **`id: 4`** (`T=490`) | • `ChunkGatedDeltaRuleFwd`: `205.053` (`93.211%`)<br>• `Transpose`: `12.488` (`5.677%`)<br>• `Cast`: `2.448` (`1.113%`)<br>**合计：`219.989 us`** | • `ChunkGatedDeltaRuleFwd`: `150.768` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`150.768 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-14.936 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-54.285 us`**（主核自身提速 `-26.47%`） |
+| **`id: 2`**（`T=1056`） | `ChunkGatedDeltaRuleFwd` `299.757`（94.98%）<br>`Cast` `3.567`（1.13%）<br>`Transpose` `12.280`（3.89%）<br>**合计 315.604 µs** | `ChunkGatedDeltaRuleFwd` `94.188`（100%）<br>独立 `Cast` 和 `Transpose` 均为 `0.000`<br>**合计 94.188 µs** | 两个独立预处理步骤合计节省 **15.847 µs**，融合 kernel 时延降低 **68.58%**。 |
+| **`id: 3`**（`T=1312`） | `ChunkGatedDeltaRuleFwd` `325.577`（95.23%）<br>`Cast` `4.160`（1.22%）<br>`Transpose` `12.129`（3.55%）<br>**合计 341.867 µs** | `ChunkGatedDeltaRuleFwd` `108.634`（100%）<br>独立 `Cast` 和 `Transpose` 均为 `0.000`<br>**合计 108.634 µs** | 两个独立预处理步骤合计节省 **16.289 µs**，融合 kernel 时延降低 **66.63%**。 |
+| **`id: 4`**（`T=1568`） | `ChunkGatedDeltaRuleFwd` `367.022`（95.60%）<br>`Cast` `4.732`（1.23%）<br>`Transpose` `12.180`（3.17%）<br>**合计 383.934 µs** | `ChunkGatedDeltaRuleFwd` `119.709`（100%）<br>独立 `Cast` 和 `Transpose` 均为 `0.000`<br>**合计 119.709 µs** | 两个独立预处理步骤合计节省 **16.912 µs**，融合 kernel 时延降低 **67.38%**。 |
 
-### 3.3 补测对比：`Batchsize = 16` 场景（分支 `perf/chunk_gated_delta_rule_fwd_bs16`）
+表中数值由原始采样独立四舍五入，用显示值相加或相减时可能相差 0.001 µs。
 
-将 `id: 2 ~ 4` 更新为现网 `Batchsize = 16` 场景（`T = 1056 / 1312 / 1568`），在同一台 Ascend 910B（NPU 0）上使用相同构建环境对比 `64af2068` 与 `7cda4da4`：
-- **优化前基线**（commit `64af2068`）：`atk_chunk_gated_delta_rule_fwd_perf_2026-11-19-17-37-51-904146`
-- **优化后结果**（commit `7cda4da4`）：`atk_chunk_gated_delta_rule_fwd_perf_2026-11-19-17-18-15-945809`
+### 3.3 复测结论
 
-#### 3.3.1 `Batchsize = 16` 端到端耗时对比
+三个 StrictGist 用例的设备侧总时延分别降低 **70.16%、68.22%、68.82%**。ID 4 的绝对收益最大，每次调用节省 **264.226 µs**。单独比较融合 kernel，ID 2–4 的时延分别降低 **68.58%、66.63%、67.38%**。
 
-| 用例 ID | 场景描述 | 优化前均值 (us) | 优化后均值 (us) | 绝对收益 (us) | 相对优化幅度 |
-| :---: | :--- | ---: | ---: | ---: | :---: |
-| `id: 0` | 长序列 inference（`B=1, T=11274, BNSD, BT=64, state_initial_final`） | `3887.201` | `3888.270` | `+1.069` | `+0.03%`（误差波动内，无回退） |
-| `id: 1` | 长序列 training（`B=2, T=8192, BNSD, BT=64, dense`） | `4882.730` | `4890.998` | `+8.268` | `+0.17%`（误差波动内，无回退） |
-| **`id: 2`** | **StrictGist varlen `T=1056`（16×66, `BSND, BT=128`）** | **`318.089`** | **`226.044`** | **`-92.046`** | **`-28.94%`** |
-| **`id: 3`** | **StrictGist varlen `T=1312`（16×82, `BSND, BT=128`）** | **`343.570`** | **`250.739`** | **`-92.831`** | **`-27.02%`** |
-| **`id: 4`** | **StrictGist varlen `T=1568`（16×98, `BSND, BT=128`）** | **`381.927`** | **`285.662`** | **`-96.265`** | **`-25.21%`** |
-
-#### 3.3.2 `Batchsize = 16` 下 `id: 2 ~ 4` 子算子 Profiling 拆解（`op_statistic.csv`）
-
-| 用例 ID | 优化前子算子构成及平均耗时（us / 占比） | 优化后子算子构成及平均耗时（us / 占比） | 拆解收益分析 |
-| :---: | :--- | :--- | :--- |
-| **`id: 2`** (`T=1056`) | • `ChunkGatedDeltaRuleFwd`: `300.984` (`94.622%`)<br>• `Transpose`: `13.388` (`4.209%`)<br>• `Cast`: `3.717` (`1.169%`)<br>**合计：`318.089 us`** | • `ChunkGatedDeltaRuleFwd`: `226.044` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`226.044 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-17.105 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-74.940 us`**（主核自身提速 `-24.90%`） |
-| **`id: 3`** (`T=1312`) | • `ChunkGatedDeltaRuleFwd`: `326.085` (`94.911%`)<br>• `Transpose`: `13.158` (`3.830%`)<br>• `Cast`: `4.327` (`1.259%`)<br>**合计：`343.570 us`** | • `ChunkGatedDeltaRuleFwd`: `250.739` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`250.739 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-17.485 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-75.346 us`**（主核自身提速 `-23.11%`） |
-| **`id: 4`** (`T=1568`) | • `ChunkGatedDeltaRuleFwd`: `364.172` (`95.351%`)<br>• `Transpose`: `12.927` (`3.385%`)<br>• `Cast`: `4.827` (`1.264%`)<br>**合计：`381.927 us`** | • `ChunkGatedDeltaRuleFwd`: `285.662` (`100%`)<br>• `Transpose`: **已消除（0）**<br>• `Cast`: **已消除（0）**<br>**合计：`285.662 us`** | • 融合 `beta` 预处理消除 `Transpose + Cast`：**`-17.754 us`**<br>• 主核内 `singleChunkNoState` 剪枝：**`-78.510 us`**（主核自身提速 `-21.56%`） |
-
-### 3.4 结论小结
-
-- **性能达标情况**：
-  - **`Batchsize = 5`（`T = 330 / 410 / 490`）**：`id: 2 / 3 / 4` 端到端时延分别下降 **34.33% / 33.52% / 31.47%**（加速比 **1.46x ~ 1.52x**）；
-  - **`Batchsize = 16`（`T = 1056 / 1312 / 1568`）**：`id: 2 / 3 / 4` 端到端时延分别下降 **28.94% / 27.02% / 25.21%**（绝对省时放大至 **`92.0 ~ 96.3 us`**，加速比 **1.34x ~ 1.41x**）；
-  - 两批测试均大幅超过 **≥10%** 的预期目标，且常规长序列基线 `id: 0 / 1` 保持无回退。
-- **正确性保证**：全部优化基于通用条件触发并经过 CPU FP64 黄金参考验证（包含 `atk_chunk_gated_delta_rule_fwd.json` 70 组用例 × `disable_recompute=False/True` 共 140/140 项检查、5 个性能用例及长短混排 varlen 边界用例，全部通过）。
+原始汇总数据见远程工作区 `/mnt/workspace/gdn-bs16-60.11cE7k/cann91-native-vs-64af2068.csv`。
 
 ---
 
